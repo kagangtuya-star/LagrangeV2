@@ -26,6 +26,8 @@ on:
 jobs:
   build:
     runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write
     strategy:
       matrix:
         include:
@@ -35,8 +37,14 @@ jobs:
           - os: macos-latest
             rid: osx-arm64
             binary-extension: ''
+          - os: macos-13
+            rid: osx-x64
+            binary-extension: ''
           - os: ubuntu-latest
             rid: linux-x64
+            binary-extension: ''
+          - os: ubuntu-24.04-arm
+            rid: linux-arm64
             binary-extension: ''
 
     env:
@@ -44,7 +52,7 @@ jobs:
 
     steps:
       - name: Install Linux Dependencies
-        if: matrix.os == 'ubuntu-latest'
+        if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y clang zlib1g-dev
 
       - name: Setup .NET SDK
@@ -58,15 +66,19 @@ jobs:
       - name: Publish
         run: dotnet publish Lagrange.Milky -c Release -r ${{ matrix.rid }}
 
-      - if: github.event_name != 'pull_request'
-        uses: actions/upload-artifact@v4
+      - name: Rename Binary
+        if: github.event_name != 'pull_request'
+        shell: bash
+        run: |
+          mv "Lagrange.Milky/bin/Release/net10.0/${{ matrix.rid }}/publish/Lagrange.Milky${{ matrix.binary-extension }}" \
+             "Lagrange.Milky/bin/Release/net10.0/${{ matrix.rid }}/publish/Lagrange.Milky-${{ matrix.rid }}${{ matrix.binary-extension }}"
+
+      - name: Upload to Pre-Release
+        if: github.event_name != 'pull_request'
+        uses: softprops/action-gh-release@v2
         with:
-          name: Lagrange.Milky-${{ matrix.rid }}
-          path: Lagrange.Milky/bin/Release/net10.0/${{ matrix.rid }}/publish/Lagrange.Milky${{ matrix.binary-extension }}
-      - if: github.event_name != 'pull_request'
-        uses: actions/upload-artifact@v4
-        with:
-          name: Lagrange.Milky-${{ matrix.rid }}-symbol-files
-          path: |
-            Lagrange.Milky/bin/Release/net10.0/${{ matrix.rid }}/publish/*
-            !Lagrange.Milky/bin/Release/net10.0/${{ matrix.rid }}/publish/Lagrange.Milky${{ matrix.binary-extension }}
+          tag_name: nightly
+          name: Nightly Build
+          prerelease: true
+          make_latest: false
+          files: Lagrange.Milky/bin/Release/net10.0/${{ matrix.rid }}/publish/Lagrange.Milky-${{ matrix.rid }}${{ matrix.binary-extension }}
