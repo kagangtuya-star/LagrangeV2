@@ -37,6 +37,11 @@ public sealed class Signer : BotSignProvider, IDisposable
 
     private readonly long _uin;
     private readonly string? _token;
+    
+    private readonly string? _launcherSig;
+    private string? _jwtToken;
+    private int _refreshStarted;
+    private CancellationTokenSource? _refreshCts;
 
     public Signer(ILogger<Signer> logger, IOptions<CoreConfiguration> options)
     {
@@ -56,6 +61,7 @@ public sealed class Signer : BotSignProvider, IDisposable
 
         _uin = options.Value.Login.Uin ?? 0;
         _token = signerConfiguration.Token;
+        _launcherSig = Environment.GetEnvironmentVariable("APP_LAUNCHER_SIG");
     }
 
     public override bool IsWhiteListCommand(string cmd) => PcWhiteListCommand.Contains(cmd);
@@ -67,9 +73,13 @@ public sealed class Signer : BotSignProvider, IDisposable
             using var request = new HttpRequestMessage();
             request.Method = HttpMethod.Post;
             request.RequestUri = new Uri($"{_url}{(_url.EndsWith('/') ? "" : "/")}api/sign/sec-sign");
-            if (!string.IsNullOrEmpty(_token))
+            if (!string.IsNullOrEmpty(_jwtToken))
             {
-                request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _token);
+                request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _jwtToken);
+            }
+            else if (!string.IsNullOrEmpty(_launcherSig))
+            {
+                request.Headers.TryAddWithoutValidation("X-Launcher-Signature", _launcherSig);
             }
             request.Content = new StringContent(
                 JsonUtility.Serialize(new SecSignRequest
@@ -87,6 +97,16 @@ public sealed class Signer : BotSignProvider, IDisposable
 
             using var response = await _client.SendAsync(request);
             response.EnsureSuccessStatusCode();
+
+            if (response.Headers.TryGetValues("X-SET-TOKEN", out var tokenValues))
+            {
+                string? newToken = tokenValues.FirstOrDefault();
+                if (!string.IsNullOrEmpty(newToken))
+                {
+                    Interlocked.Exchange(ref _jwtToken, newToken);
+                    EnsureRefreshStarted();
+                }
+            }
 
             using var stream = await response.Content.ReadAsStreamAsync();
             var result = JsonUtility.Deserialize<SignerResponse<SecSignResponse>>(stream);
@@ -108,8 +128,64 @@ public sealed class Signer : BotSignProvider, IDisposable
     }
 
 
+    private void EnsureRefreshStarted()
+    {
+        if (Interlocked.CompareExchange(ref _refreshStarted, 1, 0) == 0)
+        {
+            _refreshCts = new CancellationTokenSource();
+            _ = RefreshTokenLoopAsync(_refreshCts.Token);
+        }
+    }
+
+    private async Task RefreshTokenLoopAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            while (!cancellationToken.IsCancellationRequested)
+            {
+                await Task.Delay(TimeSpan.FromHours(4), cancellationToken);
+                await RefreshTokenAsync(cancellationToken);
+            }
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception e)
+        {
+            _logger.LogTokenRefreshLoopFailed(e);
+        }
+    }
+
+    private async Task RefreshTokenAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            var currentToken = Interlocked.CompareExchange(ref _jwtToken, null, null);
+            if (string.IsNullOrEmpty(currentToken)) return;
+
+            using var request = new HttpRequestMessage();
+            request.Method = HttpMethod.Post;
+            request.RequestUri = new Uri($"{_url}{(_url.EndsWith('/') ? "" : "/")}token/refresh");
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", currentToken);
+
+            using var response = await _client.SendAsync(request, cancellationToken);
+            response.EnsureSuccessStatusCode();
+
+            if (response.Headers.TryGetValues("X-SET-TOKEN", out var tokenValues))
+            {
+                string? newToken = tokenValues.FirstOrDefault();
+                if (!string.IsNullOrEmpty(newToken)) Interlocked.Exchange(ref _jwtToken, newToken);
+            }
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception e)
+        {
+            _logger.LogTokenRefreshFailed(e);
+        }
+    }
+
     public void Dispose()
     {
+        _refreshCts?.Cancel();
+        _refreshCts?.Dispose();
         _client.Dispose();
     }
 }
@@ -118,6 +194,12 @@ public static partial class SignerLoggerExtension
 {
     [LoggerMessage(LogLevel.Error, "Get sec sign failed")]
     public static partial void LogGetSecSignFailed(this ILogger<Signer> logger, Exception e);
+
+    [LoggerMessage(LogLevel.Error, "Token refresh failed")]
+    public static partial void LogTokenRefreshFailed(this ILogger<Signer> logger, Exception e);
+
+    [LoggerMessage(LogLevel.Error, "Token refresh loop failed unexpectedly")]
+    public static partial void LogTokenRefreshLoopFailed(this ILogger<Signer> logger, Exception e);
 }
 
 public class SignerResponse<T>
