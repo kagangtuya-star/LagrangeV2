@@ -96,7 +96,7 @@ public ref struct ProtoReader
             }
             shift += 7;
         }
-        while (shift < sizeof(T) << 3);
+        while (shift < Unsafe.SizeOf<T>() << 3);
         ThrowHelper.ThrowInvalidDataException_MalformedMessage();
         return result;
     }
