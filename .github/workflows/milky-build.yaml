@@ -52,13 +52,13 @@ jobs:
       RUNTIME_IDENTIFIER: ${{ matrix.rid }}
 
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
       - name: Setup .NET SDK
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v5
         with:
           dotnet-version: '10'
-
-      - name: Checkout code
-        uses: actions/checkout@v4
 
       - name: Publish on non-Linux
         if: runner.os != 'Linux'
@@ -83,6 +83,23 @@ jobs:
         run: |
           mv "Lagrange.Milky/bin/Release/net10.0/${{ matrix.rid }}/publish/Lagrange.Milky${{ matrix.binary-extension }}" \
              "Lagrange.Milky/bin/Release/net10.0/${{ matrix.rid }}/publish/Lagrange.Milky-${{ matrix.artifact-rid }}${{ matrix.binary-extension }}"
+
+      - name: Prepare artifact bundle
+        shell: bash
+        run: |
+          publish_dir="Lagrange.Milky/bin/Release/net10.0/${{ matrix.rid }}/publish"
+          artifact_dir="artifacts/Lagrange.Milky-${{ matrix.artifact-rid }}"
+          rm -rf "$artifact_dir"
+          mkdir -p "$artifact_dir"
+          cp -a "$publish_dir"/. "$artifact_dir"/
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Lagrange.Milky-${{ matrix.artifact-rid }}
+          path: artifacts/Lagrange.Milky-${{ matrix.artifact-rid }}
+          if-no-files-found: error
+          retention-days: 7
 
       - name: Upload to Pre-Release
         if: github.event_name != 'pull_request'
