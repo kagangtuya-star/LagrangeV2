@@ -80,12 +80,14 @@ public ref struct ProtoReader
     }
     
     [MethodImpl(MethodImplOptions.NoInlining)]
-    private unsafe T DecodeVarIntSlowPath<T>() where T : unmanaged, INumber<T>
+    private T DecodeVarIntSlowPath<T>() where T : unmanaged, INumber<T>
     {
         int shift = 0;
         T result = T.Zero;
         do
         {
+            if (_offset >= _length) ThrowHelper.ThrowInvalidDataException_MalformedMessage();
+
             byte b = Unsafe.Add(ref _first, _offset++);
             result += T.CreateTruncating((ulong)(b & 0x7Fu) << shift);
             if (b <= 0x7F)
@@ -352,11 +354,29 @@ public ref struct ProtoReader
 
     private void SkipVarInt()
     {
+        if (_length - _offset < 16)
+        {
+            SkipVarIntSlowPath();
+            return;
+        }
+
         ulong b0 = Unsafe.As<byte, ulong>(ref Unsafe.Add(ref _first, _offset));
         ulong b1 = Unsafe.As<byte, ulong>(ref Unsafe.Add(ref _first, _offset + 8));
         ulong msbs0 = ~b0 & ~0x7f7f7f7f7f7f7f7ful;
         ulong msbs1 = ~b1 & ~0x7f7f7f7f7f7f7f7ful;
         _offset += msbs0 == 0 ? (BitOperations.TrailingZeroCount(msbs1) + 1 + 64) >> 3 : BitOperations.TrailingZeroCount(msbs0) + 1 >> 3;
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private void SkipVarIntSlowPath()
+    {
+        for (int i = 0; i < 10; i++)
+        {
+            if (_offset >= _length) ThrowHelper.ThrowInvalidDataException_MalformedMessage();
+            if (Unsafe.Add(ref _first, _offset++) <= 0x7F) return;
+        }
+
+        ThrowHelper.ThrowInvalidDataException_MalformedMessage();
     }
     
     private void SkipFixed32()

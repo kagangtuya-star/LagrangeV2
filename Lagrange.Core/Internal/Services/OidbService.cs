@@ -29,14 +29,23 @@ internal abstract class OidbService<TEventReq, TEventResp, TRequest, TResponse> 
     
     protected override async ValueTask<TEventResp> Parse(ReadOnlyMemory<byte> input, BotContext context)
     {
-        var oidb = ProtoHelper.Deserialize<Oidb>(input.Span);
-        if (oidb.Result != 0)
+        try
         {
-            context.LogWarning(Tag, "Error: {0}, Message: {1}", null, oidb.Result, oidb.Message);
-            throw new OperationException((int)oidb.Result, oidb.Message);
+            var oidb = ProtoHelper.Deserialize<Oidb>(input.Span);
+            if (oidb.Result != 0)
+            {
+                context.LogWarning(Tag, "Error: {0}, Message: {1}", null, oidb.Result, oidb.Message);
+                throw new OperationException((int)oidb.Result, oidb.Message);
+            }
+            
+            return await ProcessResponse(ProtoHelper.Deserialize<TResponse>(oidb.Body.Span), context);
         }
-        
-        return await ProcessResponse(ProtoHelper.Deserialize<TResponse>(oidb.Body.Span), context);
+        catch (Exception ex) when (ex is InvalidDataException or ArgumentOutOfRangeException)
+        {
+            string preview = Convert.ToHexString(input.Span[..Math.Min(input.Length, 32)]);
+            context.LogError(Tag, "Failed to deserialize OIDB response. PacketLength: {0}, Preview: {1}", ex, input.Length, preview);
+            throw;
+        }
     }
 
     protected override async ValueTask<ReadOnlyMemory<byte>> Build(TEventReq input, BotContext context)

@@ -128,8 +128,6 @@ internal partial class FetchGroupsResponseGroup
     [ProtoMember(3)] public long GroupUin { get; set; }
 
     [ProtoMember(4)] public FetchGroupsResponseGroupInfo Info { get; set; }
-
-    [ProtoMember(5)] public FetchGroupsResponseCustomInfo CustomInfo { get; set; }
 }
 
 [ProtoPackable]
@@ -150,14 +148,6 @@ internal partial class FetchGroupsResponseGroupInfo
     [ProtoMember(19)] public string? Question { get; set; }
 
     [ProtoMember(30)] public string? Announcement { get; set; }
-}
-
-[ProtoPackable]
-internal partial class FetchGroupsResponseCustomInfo
-{
-    [ProtoMember(1)] public long LastSpeakTime { get; set; }
-    
-    [ProtoMember(5)] public uint LastestSeq { get; set; }
 }
 
 [ProtoPackable]

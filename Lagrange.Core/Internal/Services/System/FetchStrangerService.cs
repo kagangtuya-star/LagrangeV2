@@ -74,50 +74,59 @@ internal class FetchStrangerService : BaseService<FetchStrangerEventReqBase, Fet
 
     protected override ValueTask<FetchStrangerEventResp> Parse(ReadOnlyMemory<byte> input, BotContext context)
     {
-        var oidb = ProtoHelper.Deserialize<Oidb>(input.Span);
-        if (oidb.Result != 0)
+        try
         {
-            context.LogWarning(Tag, "Error: {0}, Message: {1}", null, oidb.Result, oidb.Message);
-            throw new OperationException((int)oidb.Result, oidb.Message);
+            var oidb = ProtoHelper.Deserialize<Oidb>(input.Span);
+            if (oidb.Result != 0)
+            {
+                context.LogWarning(Tag, "Error: {0}, Message: {1}", null, oidb.Result, oidb.Message);
+                throw new OperationException((int)oidb.Result, oidb.Message);
+            }
+            var response = ProtoHelper.Deserialize<FetchStrangerResponse>(oidb.Body.Span);
+
+            var numbers = response.Body.Properties.NumberProperties.ToDictionary(
+                property => property.Key,
+                property => property.Value
+            );
+            var bytes = response.Body.Properties.BytesProperties.ToDictionary(
+                property => property.Key,
+                property => property.Value
+            );
+
+            // Check exists
+            if (!bytes.TryGetValue(20002, out byte[]? nicknameBytes))
+            {
+                throw new OperationException(-1, "Stranger not found");
+            }
+
+            // Birthday
+            byte[] birthday = bytes[20031];
+            int year = BinaryPrimitives.ReadUInt16BigEndian(birthday.AsSpan(0, 2));
+            int month = birthday[2];
+            int day = birthday[3];
+
+            return ValueTask.FromResult(new FetchStrangerEventResp(new BotStranger(
+                response.Body.Uin,
+                Encoding.UTF8.GetString(nicknameBytes),
+                string.Empty, // Can't not get uid
+                Encoding.UTF8.GetString(bytes[102]),
+                Encoding.UTF8.GetString(bytes[103]),
+                numbers[105],
+                (BotGender)numbers[20009],
+                DateTimeOffset.FromUnixTimeSeconds((long)numbers[20026]).DateTime,
+                month != 0 && day != 0 ? new DateTime(year != 0 ? year : 1, month, day) : null,
+                numbers[20037],
+                Encoding.UTF8.GetString(bytes[27394]),
+                Encoding.UTF8.GetString(bytes[20003]),
+                Encoding.UTF8.GetString(bytes[20004]),
+                bytes.TryGetValue(200021, out byte[]? value) ? Encoding.UTF8.GetString(value) : null
+            )));
         }
-        var response = ProtoHelper.Deserialize<FetchStrangerResponse>(oidb.Body.Span);
-
-        var numbers = response.Body.Properties.NumberProperties.ToDictionary(
-            property => property.Key,
-            property => property.Value
-        );
-        var bytes = response.Body.Properties.BytesProperties.ToDictionary(
-            property => property.Key,
-            property => property.Value
-        );
-
-        // Check exists
-        if (!bytes.TryGetValue(20002, out byte[]? nicknameBytes))
+        catch (Exception ex) when (ex is InvalidDataException or ArgumentOutOfRangeException)
         {
-            throw new OperationException(-1, "Stranger not found");
+            string preview = Convert.ToHexString(input.Span[..Math.Min(input.Length, 32)]);
+            context.LogError(Tag, "Failed to deserialize OIDB response. PacketLength: {0}, Preview: {1}", ex, input.Length, preview);
+            throw;
         }
-
-        // Birthday
-        byte[] birthday = bytes[20031];
-        int year = BinaryPrimitives.ReadUInt16BigEndian(birthday.AsSpan(0, 2));
-        int month = birthday[2];
-        int day = birthday[3];
-
-        return ValueTask.FromResult(new FetchStrangerEventResp(new BotStranger(
-            response.Body.Uin,
-            Encoding.UTF8.GetString(nicknameBytes),
-            string.Empty, // Can't not get uid
-            Encoding.UTF8.GetString(bytes[102]),
-            Encoding.UTF8.GetString(bytes[103]),
-            numbers[105],
-            (BotGender)numbers[20009],
-            DateTimeOffset.FromUnixTimeSeconds((long)numbers[20026]).DateTime,
-            month != 0 && day != 0 ? new DateTime(year != 0 ? year : 1, month, day) : null,
-            numbers[20037],
-            Encoding.UTF8.GetString(bytes[27394]),
-            Encoding.UTF8.GetString(bytes[20003]),
-            Encoding.UTF8.GetString(bytes[20004]),
-            bytes.TryGetValue(200021, out byte[]? value) ? Encoding.UTF8.GetString(value) : null
-        )));
     }
 }

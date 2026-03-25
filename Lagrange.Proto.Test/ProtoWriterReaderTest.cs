@@ -705,6 +705,18 @@ public class ProtoWriterReaderTest
         
         Assert.That(value, Is.EqualTo(67890));
     }
+
+    [Test]
+    public void TestSkipField_VarInt_Truncated_ThrowsInvalidDataException()
+    {
+        byte[] data = [0x80];
+
+        Assert.Throws<InvalidDataException>(() =>
+        {
+            var reader = new ProtoReader(data);
+            reader.SkipField(WireType.VarInt);
+        });
+    }
     
     [Test]
     public void TestSkipField_Fixed32()

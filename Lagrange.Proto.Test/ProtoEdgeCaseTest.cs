@@ -407,6 +407,17 @@ public class ProtoEdgeCaseTest
             localReader.CreateSpan(localLength);
         });
     }
+
+    [Test]
+    public void TestInvalidData_SourceGeneratedUnknownVarIntField()
+    {
+        byte[] payload = [0x08, 0x2A, 0x10, 0x80];
+
+        Assert.Throws<InvalidDataException>(() =>
+        {
+            ProtoSerializer.DeserializeProtoPackable<UnknownFieldTruncatedTest>(payload);
+        });
+    }
     
     #endregion
 }
@@ -531,6 +542,12 @@ public partial class LargeDataTest
     [ProtoMember(1)] public byte[] LargeByteArray { get; set; } = Array.Empty<byte>();
     [ProtoMember(2)] public string LargeString { get; set; } = string.Empty;
     [ProtoMember(3)] public int[] LargeIntArray { get; set; } = Array.Empty<int>();
+}
+
+[ProtoPackable]
+public partial class UnknownFieldTruncatedTest
+{
+    [ProtoMember(1)] public int Value { get; set; }
 }
 
 #endregion
