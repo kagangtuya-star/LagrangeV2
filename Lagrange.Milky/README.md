@@ -10,6 +10,11 @@ _[Milky](https://github.com/SaltifyDev/milky) protocol implementation based on [
 
 https://lagrangedev.github.io/Lagrange.Milky.Document
 
+## Nightly Builds
+
+- `android-arm64` nightly artifact is published as a `.tar.gz` bundle of the full publish directory.
+- `android-arm64` is currently treated as an experimental Native AOT target in CI.
+
 ## Feature List
 
 Current Milky version: [35cc41d](https://github.com/SaltifyDev/milky/tree/35cc41de7ae4fe7998e5ec8fb79e65fbf5b4cf0c)
