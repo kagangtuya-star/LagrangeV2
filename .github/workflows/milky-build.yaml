@@ -26,48 +26,27 @@ on:
 jobs:
   build:
     runs-on: ${{ matrix.os }}
-    continue-on-error: ${{ matrix.experimental }}
     permissions:
       contents: write
     strategy:
-      fail-fast: false
       matrix:
         include:
           - os: windows-latest
             rid: win-x64
             artifact-rid: win-x64
             binary-extension: '.exe'
-            publish-host: runner
-            artifact-kind: binary
-            experimental: false
           - os: macos-latest
             rid: osx-arm64
             artifact-rid: osx-arm64
             binary-extension: ''
-            publish-host: runner
-            artifact-kind: binary
-            experimental: false
           - os: ubuntu-latest
             rid: linux-musl-x64
             artifact-rid: linux-x64
             binary-extension: ''
-            publish-host: alpine-aot
-            artifact-kind: binary
-            experimental: false
           - os: ubuntu-24.04-arm
             rid: linux-musl-arm64
             artifact-rid: linux-arm64
             binary-extension: ''
-            publish-host: alpine-aot
-            artifact-kind: binary
-            experimental: false
-          - os: ubuntu-latest
-            rid: android-arm64
-            artifact-rid: android-arm64
-            binary-extension: ''
-            publish-host: runner
-            artifact-kind: archive
-            experimental: true
 
     env:
       RUNTIME_IDENTIFIER: ${{ matrix.rid }}
@@ -81,12 +60,12 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Publish on runner
-        if: matrix.publish-host == 'runner'
+      - name: Publish on non-Linux
+        if: runner.os != 'Linux'
         run: dotnet publish Lagrange.Milky -c Release -r ${{ matrix.rid }}
 
-      - name: Publish in Alpine AOT container
-        if: matrix.publish-host == 'alpine-aot'
+      - name: Publish on Linux
+        if: runner.os == 'Linux'
         run: |
           docker run --rm \
             -e HOME=/tmp \
@@ -99,22 +78,14 @@ jobs:
             sh -lc "apk add --no-cache ca-certificates cmake make pkgconf openssl-dev openssl-libs-static zlib-static && mkdir -p /tmp/dotnet /tmp/nuget/packages && dotnet publish Lagrange.Milky -c Release -r ${{ matrix.rid }} && chmod -R a+rwX /src/Lagrange.Milky/bin"
 
       - name: Rename Binary
-        if: github.event_name != 'pull_request' && matrix.artifact-kind == 'binary'
+        if: github.event_name != 'pull_request'
         shell: bash
         run: |
           mv "Lagrange.Milky/bin/Release/net10.0/${{ matrix.rid }}/publish/Lagrange.Milky${{ matrix.binary-extension }}" \
              "Lagrange.Milky/bin/Release/net10.0/${{ matrix.rid }}/publish/Lagrange.Milky-${{ matrix.artifact-rid }}${{ matrix.binary-extension }}"
 
-      - name: Archive Publish Directory
-        if: github.event_name != 'pull_request' && matrix.artifact-kind == 'archive'
-        shell: bash
-        run: |
-          publish_dir="Lagrange.Milky/bin/Release/net10.0/${{ matrix.rid }}/publish"
-          archive_path="Lagrange.Milky/bin/Release/net10.0/${{ matrix.rid }}/Lagrange.Milky-${{ matrix.artifact-rid }}.tar.gz"
-          tar -C "$publish_dir" --exclude="*.a" --exclude="*.pdb" -czf "$archive_path" .
-
-      - name: Upload binary to Pre-Release
-        if: github.event_name != 'pull_request' && matrix.artifact-kind == 'binary'
+      - name: Upload to Pre-Release
+        if: github.event_name != 'pull_request'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: nightly
@@ -122,13 +93,3 @@ jobs:
           prerelease: true
           make_latest: false
           files: Lagrange.Milky/bin/Release/net10.0/${{ matrix.rid }}/publish/Lagrange.Milky-${{ matrix.artifact-rid }}${{ matrix.binary-extension }}
-
-      - name: Upload archive to Pre-Release
-        if: github.event_name != 'pull_request' && matrix.artifact-kind == 'archive'
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: nightly
-          name: Nightly Build
-          prerelease: true
-          make_latest: false
-          files: Lagrange.Milky/bin/Release/net10.0/${{ matrix.rid }}/Lagrange.Milky-${{ matrix.artifact-rid }}.tar.gz
