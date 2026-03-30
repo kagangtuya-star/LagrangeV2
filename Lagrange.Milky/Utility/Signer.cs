@@ -62,6 +62,11 @@ public sealed class Signer : BotSignProvider, IDisposable
         _uin = options.Value.Login.Uin ?? 0;
         _token = signerConfiguration.Token;
         _launcherSig = Environment.GetEnvironmentVariable("APP_LAUNCHER_SIG");
+        if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("APP_JWT_TOKEN")))
+        {
+            _jwtToken = Environment.GetEnvironmentVariable("APP_JWT_TOKEN");
+            EnsureRefreshStarted();
+        }
     }
 
     public override bool IsWhiteListCommand(string cmd) => PcWhiteListCommand.Contains(cmd);
@@ -75,10 +80,12 @@ public sealed class Signer : BotSignProvider, IDisposable
             request.RequestUri = new Uri($"{_url}{(_url.EndsWith('/') ? "" : "/")}api/sign/sec-sign");
             if (!string.IsNullOrEmpty(_jwtToken))
             {
+                _logger.LogInformation("Using JWT token for authentication");
                 request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _jwtToken);
             }
             else if (!string.IsNullOrEmpty(_launcherSig))
             {
+                _logger.LogWarning("JWT token is not available, falling back to launcher signature for authentication.");
                 request.Headers.TryAddWithoutValidation("X-Launcher-Signature", _launcherSig);
             }
             request.Content = new StringContent(
@@ -104,6 +111,7 @@ public sealed class Signer : BotSignProvider, IDisposable
                 if (!string.IsNullOrEmpty(newToken))
                 {
                     Interlocked.Exchange(ref _jwtToken, newToken);
+                    Environment.SetEnvironmentVariable("APP_JWT_TOKEN", newToken);
                     EnsureRefreshStarted();
                 }
             }
@@ -172,7 +180,11 @@ public sealed class Signer : BotSignProvider, IDisposable
             if (response.Headers.TryGetValues("X-SET-TOKEN", out var tokenValues))
             {
                 string? newToken = tokenValues.FirstOrDefault();
-                if (!string.IsNullOrEmpty(newToken)) Interlocked.Exchange(ref _jwtToken, newToken);
+                if (!string.IsNullOrEmpty(newToken))
+                {
+                    Interlocked.Exchange(ref _jwtToken, newToken);
+                    Environment.SetEnvironmentVariable("APP_JWT_TOKEN", newToken);
+                }
             }
         }
         catch (OperationCanceledException) { throw; }
