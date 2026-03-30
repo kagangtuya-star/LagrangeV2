@@ -74,41 +74,18 @@ public class ImageEntity : RichMediaEntityBase
     public override string ToPreviewString() => Summary;
     internal override Elem[] Build()
     {
-        if (_compat != null)
-        {
-            var compatElem = IsGroup
-                ? new Elem { CustomFace = ProtoHelper.Deserialize<CustomFace>(_compat) }
-                : new Elem { NotOnlineImage = ProtoHelper.Deserialize<NotOnlineImage>(_compat) };
-            
-            return
-            [
-                compatElem,
-                new Elem()
+        return
+        [
+            new Elem()
+            {
+                CommonElem = new CommonElem
                 {
-                    CommonElem = new CommonElem
-                    {
-                        ServiceType = 48,
-                        PbElem = ProtoHelper.Serialize(MsgInfo ?? throw new ArgumentNullException(nameof(MsgInfo))),
-                        BusinessType = IsGroup ? 20u : 10u,
-                    }
+                    ServiceType = 48,
+                    PbElem = ProtoHelper.Serialize(MsgInfo ?? throw new ArgumentNullException(nameof(MsgInfo))),
+                    BusinessType = IsGroup ? 20u : 10u,
                 }
-            ];
-        }
-        else
-        {
-            return
-            [
-                new Elem()
-                {
-                    CommonElem = new CommonElem
-                    {
-                        ServiceType = 48,
-                        PbElem = ProtoHelper.Serialize(MsgInfo ?? throw new ArgumentNullException(nameof(MsgInfo))),
-                        BusinessType = IsGroup ? 20u : 10u,
-                    }
-                }
-            ];
-        }
+            }
+        ];
     }
 
     internal override IMessageEntity? Parse(List<Elem> elements, Elem target)
