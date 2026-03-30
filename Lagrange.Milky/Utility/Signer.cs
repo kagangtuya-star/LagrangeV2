@@ -143,7 +143,7 @@ public sealed class Signer : BotSignProvider, IDisposable
         {
             while (!cancellationToken.IsCancellationRequested)
             {
-                await Task.Delay(TimeSpan.FromHours(4), cancellationToken);
+                await Task.Delay(TimeSpan.FromMinutes(5), cancellationToken);
                 await RefreshTokenAsync(cancellationToken);
             }
         }
