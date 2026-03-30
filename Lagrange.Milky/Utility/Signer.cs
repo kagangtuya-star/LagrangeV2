@@ -88,6 +88,10 @@ public sealed class Signer : BotSignProvider, IDisposable
                 _logger.LogWarning("JWT token is not available, falling back to launcher signature for authentication.");
                 request.Headers.TryAddWithoutValidation("X-Launcher-Signature", _launcherSig);
             }
+            else
+            {
+                request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _token);
+            }
             request.Content = new StringContent(
                 JsonUtility.Serialize(new SecSignRequest
                 {
