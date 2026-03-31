@@ -67,6 +67,11 @@ internal class OperationLogic(BotContext context) : ILogic
         await context.EventContext.SendEvent<GroupMemberRenameEventResp>(new GroupMemberRenameEventReq(groupUin, uid, name));
     }
     
+    public async Task SetFriendRequestAccept(string targetUid)
+    {
+        await context.EventContext.SendEvent<SetFriendRequestAcceptEventResp>(new SetFriendRequestAcceptEventReq(targetUid));
+    }
+    
     public async Task GroupQuit(long groupUin)
     {
         await context.EventContext.SendEvent<GroupQuitEventResp>(new GroupQuitEventReq(groupUin));

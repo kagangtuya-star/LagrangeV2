@@ -96,6 +96,8 @@ public static partial class JsonUtility
     // get_group_notifications
     [JsonSerializable(typeof(GetGroupNotificationsParameter))]
     [JsonSerializable(typeof(GetGroupNotificationsResult))]
+    // accept_friend_request
+    [JsonSerializable(typeof(AcceptFriendRequestHandlerParameter))]
     // == file ==
     // upload_group_file
     [JsonSerializable(typeof(UploadGroupFileParameter))]
