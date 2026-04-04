@@ -70,6 +70,7 @@ internal class OperationLogic(BotContext context) : ILogic
     public async Task SetFriendRequestAccept(string targetUid)
     {
         await context.EventContext.SendEvent<SetFriendRequestAcceptEventResp>(new SetFriendRequestAcceptEventReq(targetUid));
+        await context.CacheContext.GetFriendList(true);
     }
     
     public async Task GroupQuit(long groupUin)
